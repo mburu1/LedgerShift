@@ -1,0 +1,47 @@
+-- Illustrative CDC pattern. Enable only after a source batch strategy and task
+-- ownership are agreed. A stream tracks changes to the staging table.
+CREATE TABLE IF NOT EXISTS RAW.FACT_ORDERS_STAGE (
+    ORDER_ID VARCHAR,
+    CUSTOMER_ID VARCHAR,
+    ORDER_TS TIMESTAMP_NTZ,
+    ORDER_STATUS VARCHAR,
+    TOTAL_AMOUNT NUMBER(18, 2),
+    SOURCE_BATCH_ID VARCHAR,
+    INGESTED_AT TIMESTAMP_NTZ DEFAULT CURRENT_TIMESTAMP()
+);
+
+CREATE STREAM IF NOT EXISTS RAW.FACT_ORDERS_STAGE_STREAM
+    ON TABLE RAW.FACT_ORDERS_STAGE
+    APPEND_ONLY = FALSE;
+
+-- Stream rows are consumed by MERGE. The task is created SUSPENDED; an operator
+-- must review warehouse, role grants, and source semantics before RESUME.
+CREATE TASK IF NOT EXISTS MART.TASK_MERGE_FACT_ORDERS
+    WAREHOUSE = IDENTIFIER(CURRENT_WAREHOUSE())
+    SCHEDULE = '5 MINUTE'
+    WHEN SYSTEM$STREAM_HAS_DATA('RAW.FACT_ORDERS_STAGE_STREAM')
+AS
+MERGE INTO MART.FACT_ORDERS AS target
+USING (
+    SELECT ORDER_ID, CUSTOMER_ID, ORDER_TS, ORDER_STATUS, TOTAL_AMOUNT, SOURCE_BATCH_ID
+    FROM RAW.FACT_ORDERS_STAGE_STREAM
+    QUALIFY ROW_NUMBER() OVER (
+        PARTITION BY ORDER_ID ORDER BY INGESTED_AT DESC
+    ) = 1
+) AS source
+ON target.ORDER_ID = source.ORDER_ID
+WHEN MATCHED THEN UPDATE SET
+    CUSTOMER_ID = source.CUSTOMER_ID,
+    ORDER_TS = source.ORDER_TS,
+    ORDER_STATUS = source.ORDER_STATUS,
+    TOTAL_AMOUNT = source.TOTAL_AMOUNT,
+    SOURCE_BATCH_ID = source.SOURCE_BATCH_ID,
+    LOADED_AT = CURRENT_TIMESTAMP()
+WHEN NOT MATCHED THEN INSERT
+    (ORDER_ID, CUSTOMER_ID, ORDER_TS, ORDER_STATUS, TOTAL_AMOUNT, SOURCE_BATCH_ID)
+VALUES
+    (source.ORDER_ID, source.CUSTOMER_ID, source.ORDER_TS, source.ORDER_STATUS,
+     source.TOTAL_AMOUNT, source.SOURCE_BATCH_ID);
+
+-- Before enabling in a real account, replace the warehouse expression with a
+-- concrete warehouse identifier supported by the account and validate grants.
