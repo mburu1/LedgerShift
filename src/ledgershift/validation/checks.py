@@ -6,7 +6,7 @@ from dataclasses import asdict, dataclass
 from typing import Any
 
 from pyspark.sql import DataFrame
-from pyspark.sql.functions import col, countDistinct, pmod, sum as spark_sum, xxhash64
+from pyspark.sql.functions import col, count, countDistinct, pmod, sum as spark_sum, xxhash64
 
 
 @dataclass(frozen=True)
@@ -90,8 +90,8 @@ def compare_column_checksums(
             ))
             continue
 
-        def profile(frame: DataFrame) -> dict[str, Any]:
-            value = col(name).cast("string")
+        def profile(frame: DataFrame, column_name: str) -> dict[str, Any]:
+            value = col(column_name).cast("string")
             row = frame.agg(
                 count("*").alias("rows"),
                 count(value).alias("non_null"),
@@ -100,7 +100,7 @@ def compare_column_checksums(
             ).first()
             return row.asDict()
 
-        left, right = profile(source), profile(target)
+        left, right = profile(source, name), profile(target, name)
         for metric in ("rows", "non_null", "distinct", "checksum"):
             results.append(_result(
                 f"column:{name}:{metric}", table, left[metric], right[metric]
