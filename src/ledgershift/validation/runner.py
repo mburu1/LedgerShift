@@ -30,7 +30,7 @@ def _read_file_source(spark, path: Path):
 
 
 def _metrics(frame) -> dict[str, object]:
-    from pyspark.sql.functions import col, count, countDistinct, max as spark_max, min as spark_min, sum as spark_sum
+    from pyspark.sql.functions import col, count, countDistinct, min as spark_min, max as spark_max, sum as spark_sum
 
     columns = set(frame.columns)
     row = frame.agg(count("*").alias("row_count")).first()
