@@ -2,7 +2,7 @@ resources:
   jobs:
     ledgershift_pipeline:
       name: ledgershift-${bundle.target}-pipeline
-      description: "LedgerShift generated data -> bronze/silver/gold Delta pipeline."
+      description: "LedgerShift local-compatible pipeline; see deployment guide for remote data setup."
       max_concurrent_runs: 1
       tasks:
         - task_key: pipeline_entrypoint
@@ -18,7 +18,7 @@ resources:
 
     ledgershift_validation:
       name: ledgershift-${bundle.target}-validation
-      description: "Fail-closed source-to-gold validation. Source/target paths must be available to this job."
+      description: "Fail-closed source-to-gold validation; configure matching paths before execution."
       max_concurrent_runs: 1
       tasks:
         - task_key: validation_entrypoint
@@ -26,9 +26,9 @@ resources:
             python_file: ../src/ledgershift/validation/runner.py
             parameters:
               - --source
-              - ${workspace.file_path}/data/source/snapshot/orders.jsonl
+              - ${var.source_path}
               - --target
-              - ${workspace.file_path}/data/gold/mart_daily_revenue
+              - ${var.target_path}
           environment_key: default
       environments:
         - environment_key: default
