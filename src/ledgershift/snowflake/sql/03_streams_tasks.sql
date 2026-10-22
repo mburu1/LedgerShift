@@ -17,7 +17,7 @@ CREATE STREAM IF NOT EXISTS RAW.FACT_ORDERS_STAGE_STREAM
 -- Stream rows are consumed by MERGE. The task is created SUSPENDED; an operator
 -- must review warehouse, role grants, and source semantics before RESUME.
 CREATE TASK IF NOT EXISTS MART.TASK_MERGE_FACT_ORDERS
-    WAREHOUSE = IDENTIFIER(CURRENT_WAREHOUSE())
+    WAREHOUSE = LEDGERSHIFT_WH
     SCHEDULE = '5 MINUTE'
     WHEN SYSTEM$STREAM_HAS_DATA('RAW.FACT_ORDERS_STAGE_STREAM')
 AS
@@ -43,5 +43,5 @@ VALUES
     (source.ORDER_ID, source.CUSTOMER_ID, source.ORDER_TS, source.ORDER_STATUS,
      source.TOTAL_AMOUNT, source.SOURCE_BATCH_ID);
 
--- Before enabling in a real account, replace the warehouse expression with a
+-- Before enabling in a real account, replace LEDGERSHIFT_WH with a
 -- concrete warehouse identifier supported by the account and validate grants.
