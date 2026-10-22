@@ -21,7 +21,19 @@ variable "catalog_name" {
     error_message = "catalog_name must be a valid Unity Catalog identifier."
   }
 }
-variable "data_engineers_group" { type = string; default = "ledgershift_data_engineers" }
-variable "analysts_group" { type = string; default = "ledgershift_analysts" }
-variable "ops_group" { type = string; default = "ledgershift_ops" }
-variable "owner" { type = string; default = "ledgershift" }
+variable "data_engineers_group" {
+  type = string
+  default = "ledgershift_data_engineers"
+}
+variable "analysts_group" {
+  type = string
+  default = "ledgershift_analysts"
+}
+variable "ops_group" {
+  type = string
+  default = "ledgershift_ops"
+}
+variable "owner" {
+  type = string
+  default = "ledgershift"
+}
