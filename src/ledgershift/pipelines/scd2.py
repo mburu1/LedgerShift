@@ -4,7 +4,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 
 from pyspark.sql import DataFrame
-from pyspark.sql.functions import coalesce, col, concat_ws, lit, sha2, to_timestamp
+from pyspark.sql.functions import col, lit, sha2, struct, to_json, to_timestamp
 
 
 def with_attribute_hash(frame: DataFrame, tracked_columns: Sequence[str]) -> DataFrame:
@@ -14,9 +14,9 @@ def with_attribute_hash(frame: DataFrame, tracked_columns: Sequence[str]) -> Dat
         raise ValueError("tracked columns missing: " + ", ".join(missing))
     if not tracked_columns:
         raise ValueError("tracked_columns must contain at least one column")
-    # Explicit null markers prevent concat_ws from collapsing different null patterns.
-    values = [coalesce(col(name).cast("string"), lit("<NULL>")) for name in tracked_columns]
-    return frame.withColumn("_attribute_hash", sha2(concat_ws("\u001f", *values), 256))
+    # JSON struct serialization preserves null positions and avoids delimiter collisions.
+    values = [col(name).alias(name) for name in tracked_columns]
+    return frame.withColumn("_attribute_hash", sha2(to_json(struct(*values)), 256))
 
 
 def stage_scd2(
