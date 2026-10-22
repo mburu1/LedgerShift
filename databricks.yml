@@ -12,7 +12,7 @@ variables:
     description: Application ID of the production run-as service principal
     default: ""
   warehouse_id:
-    description: Existing SQL warehouse ID, reserved for SQL warehouse tasks
+    description: Existing SQL warehouse ID for SQL tasks
     default: ""
 
 workspace:
