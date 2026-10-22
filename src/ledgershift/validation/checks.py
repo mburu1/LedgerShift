@@ -44,6 +44,10 @@ def compare_aggregates(table: str, expected: Mapping[str, Any],
             results.append(
                 CheckResult("aggregate:" + metric, table, "FAIL", left, right, reason)
             )
+        elif left != right:
+            results.append(
+                CheckResult("aggregate:" + metric, table, "FAIL", left, right, "values differ")
+            )
         else:
             results.append(_result("aggregate:" + metric, table, left, right))
     return results
