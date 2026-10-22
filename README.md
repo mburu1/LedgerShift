@@ -514,3 +514,16 @@ Definition of done: someone who has never seen the repo can deploy it using only
 ## 11. License
 
 MIT
+
+
+## M4–M5 implementation update (2026-10-22)
+
+Repository artifacts added for Databricks Asset Bundles and Snowflake serving:
+
+- `databricks.yml` defines dev/prod targets and `resources/ledgershift.yml` declares pipeline and reconciliation jobs.
+- `src/ledgershift/snowflake/load.py` provides environment-driven connector options and a DataFrame writer.
+- `src/ledgershift/snowflake/sql/` now contains serving schemas/tables, stream/task merge pattern, window analytics, and a secure analyst view.
+- `tests/unit/test_snowflake_load.py` covers required settings and invalid load inputs.
+- `docs/deployment-m4-m5.md` and `docs/validation/m4-m5-acceptance.md` document deployment and evidence requirements.
+
+**Status: implementation scaffold committed; cloud verification pending.** Databricks bundle validation/deployment, Spark connector compatibility, Snowflake SQL execution, and Delta-to-Snowflake reconciliation have not been verified by these repository writes. The bundle job paths and the task warehouse must be checked against the actual workspace/account before deployment. Do not treat the milestones as complete until the acceptance checklist has recorded real run evidence.
