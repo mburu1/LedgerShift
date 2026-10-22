@@ -6,7 +6,7 @@ from dataclasses import asdict, dataclass
 from typing import Any
 
 from pyspark.sql import DataFrame
-from pyspark.sql.functions import col, countDistinct, pmod, sum as spark_sum, xxhash64
+from pyspark.sql.functions import col, count, countDistinct, pmod, sum as spark_sum, xxhash64
 
 
 @dataclass(frozen=True)
@@ -39,12 +39,15 @@ def compare_aggregates(table: str, expected: Mapping[str, Any],
     results = []
     for metric in sorted(set(expected) | set(actual)):
         left, right = expected.get(metric), actual.get(metric)
-        if metric not in expected:
-            results.append(CheckResult("aggregate:" + metric, table, "FAIL", None, right,
-                                       "unexpected metric"))
-        elif metric not in actual:
-            results.append(CheckResult("aggregate:" + metric, table, "FAIL", left, None,
-                                       "missing metric"))
+        if metric not in expected or metric not in actual:
+            reason = "unexpected metric" if metric not in expected else "missing metric"
+            results.append(
+                CheckResult("aggregate:" + metric, table, "FAIL", left, right, reason)
+            )
+        elif left != right:
+            results.append(
+                CheckResult("aggregate:" + metric, table, "FAIL", left, right, "values differ")
+            )
         else:
             results.append(_result("aggregate:" + metric, table, left, right))
     return results
@@ -65,13 +68,22 @@ def compare_profiles(table: str, expected: Mapping[str, Mapping[str, Any]],
             continue
         for metric in sorted(set(expected[column]) | set(actual[column])):
             left, right = expected[column].get(metric), actual[column].get(metric)
-            if isinstance(left, (int, float)) and isinstance(right, (int, float)):
+            if metric not in expected[column] or metric not in actual[column]:
+                passed = False
+            elif isinstance(left, (int, float)) and isinstance(right, (int, float)):
                 passed = abs(left - right) <= tolerance
             else:
                 passed = left == right
-            results.append(CheckResult(
-                "profile:" + column + ":" + metric, table, "PASS" if passed else "FAIL",
-                left, right, "within tolerance" if passed else "profile mismatch"))
+            results.append(
+                CheckResult(
+                    "profile:" + column + ":" + metric,
+                    table,
+                    "PASS" if passed else "FAIL",
+                    left,
+                    right,
+                    "within tolerance" if passed else "profile mismatch",
+                )
+            )
     return results
 
 
@@ -90,8 +102,8 @@ def compare_column_checksums(
             ))
             continue
 
-        def profile(frame: DataFrame) -> dict[str, Any]:
-            value = col(name).cast("string")
+        def profile(frame: DataFrame, column_name: str) -> dict[str, Any]:
+            value = col(column_name).cast("string")
             row = frame.agg(
                 count("*").alias("rows"),
                 count(value).alias("non_null"),
@@ -100,7 +112,7 @@ def compare_column_checksums(
             ).first()
             return row.asDict()
 
-        left, right = profile(source), profile(target)
+        left, right = profile(source, name), profile(target, name)
         for metric in ("rows", "non_null", "distinct", "checksum"):
             results.append(_result(
                 f"column:{name}:{metric}", table, left[metric], right[metric]

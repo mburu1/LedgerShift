@@ -1,7 +1,9 @@
 """CLI for creating the local synthetic source snapshot."""
 import argparse
 import json
+
 from ledgershift.generator.seed import generate
+
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
@@ -10,7 +12,9 @@ def main() -> None:
     parser.add_argument("--orders", type=int)
     parser.add_argument("--seed", type=int)
     args = parser.parse_args()
-    print(json.dumps(generate(customers=args.customers, orders=args.orders, seed=args.seed), indent=2))
+    manifest = generate(customers=args.customers, orders=args.orders, seed=args.seed)
+    print(json.dumps(manifest, indent=2))
+
 
 if __name__ == "__main__":
     main()

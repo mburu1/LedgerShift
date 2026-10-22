@@ -1,0 +1,73 @@
+name: Databricks bundle deployment
+
+on:
+  workflow_dispatch:
+    inputs:
+      target:
+        description: Deployment target
+        required: true
+        type: choice
+        options: [dev, prod]
+  push:
+    branches: [main]
+    paths:
+      - "databricks.yml"
+      - "resources/**"
+      - "src/ledgershift/**"
+      - "pyproject.toml"
+      - ".github/workflows/deploy.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ledgershift-deploy-${{ github.event.inputs.target || 'dev' }}
+  cancel-in-progress: false
+
+jobs:
+  deploy-dev:
+    if: github.event_name == 'push' || inputs.target == 'dev'
+    runs-on: ubuntu-latest
+    environment: development
+    steps:
+      - uses: actions/checkout@v4
+      - uses: databricks/setup-cli@main
+      - name: Validate bundle
+        env:
+          DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST }}
+          DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN }}
+        run: |
+          set -euo pipefail
+          test -n "${DATABRICKS_HOST:-}" || { echo "DATABRICKS_HOST is required." >&2; exit 1; }
+          test -n "${DATABRICKS_TOKEN:-}" || { echo "DATABRICKS_TOKEN is required." >&2; exit 1; }
+          databricks bundle validate -t dev
+      - name: Deploy development target
+        env:
+          DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST }}
+          DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN }}
+        run: databricks bundle deploy -t dev
+
+  deploy-prod:
+    if: github.event_name == 'workflow_dispatch' && inputs.target == 'prod'
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+      - uses: databricks/setup-cli@main
+      - name: Validate production target
+        env:
+          DATABRICKS_HOST: ${{ secrets.DATABRICKS_PROD_HOST }}
+          DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_PROD_TOKEN }}
+          DATABRICKS_PROD_SP_APPLICATION_ID: ${{ secrets.DATABRICKS_PROD_SP_APPLICATION_ID }}
+        run: |
+          set -euo pipefail
+          test -n "${DATABRICKS_HOST:-}" || { echo "DATABRICKS_PROD_HOST is required." >&2; exit 1; }
+          test -n "${DATABRICKS_TOKEN:-}" || { echo "DATABRICKS_PROD_TOKEN is required." >&2; exit 1; }
+          test -n "${DATABRICKS_PROD_SP_APPLICATION_ID:-}" || { echo "Configure the production service principal ID." >&2; exit 1; }
+          databricks bundle validate -t prod --var="service_principal_id=$DATABRICKS_PROD_SP_APPLICATION_ID"
+      - name: Deploy production target
+        env:
+          DATABRICKS_HOST: ${{ secrets.DATABRICKS_PROD_HOST }}
+          DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_PROD_TOKEN }}
+          DATABRICKS_PROD_SP_APPLICATION_ID: ${{ secrets.DATABRICKS_PROD_SP_APPLICATION_ID }}
+        run: databricks bundle deploy -t prod --var="service_principal_id=$DATABRICKS_PROD_SP_APPLICATION_ID"

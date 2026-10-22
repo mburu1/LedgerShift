@@ -1,5 +1,4 @@
--- Illustrative CDC pattern. Enable only after a source batch strategy and task
--- ownership are agreed. A stream tracks changes to the staging table.
+-- Optional CDC merge pattern. Review warehouse/role privileges before applying.
 CREATE TABLE IF NOT EXISTS RAW.FACT_ORDERS_STAGE (
     ORDER_ID VARCHAR,
     CUSTOMER_ID VARCHAR,
@@ -14,8 +13,7 @@ CREATE STREAM IF NOT EXISTS RAW.FACT_ORDERS_STAGE_STREAM
     ON TABLE RAW.FACT_ORDERS_STAGE
     APPEND_ONLY = FALSE;
 
--- Stream rows are consumed by MERGE. The task is created SUSPENDED; an operator
--- must review warehouse, role grants, and source semantics before RESUME.
+-- Replace LEDGERSHIFT_WH with a real warehouse before applying this script.
 CREATE TASK IF NOT EXISTS MART.TASK_MERGE_FACT_ORDERS
     WAREHOUSE = LEDGERSHIFT_WH
     SCHEDULE = '5 MINUTE'
@@ -25,9 +23,7 @@ MERGE INTO MART.FACT_ORDERS AS target
 USING (
     SELECT ORDER_ID, CUSTOMER_ID, ORDER_TS, ORDER_STATUS, TOTAL_AMOUNT, SOURCE_BATCH_ID
     FROM RAW.FACT_ORDERS_STAGE_STREAM
-    QUALIFY ROW_NUMBER() OVER (
-        PARTITION BY ORDER_ID ORDER BY INGESTED_AT DESC
-    ) = 1
+    QUALIFY ROW_NUMBER() OVER (PARTITION BY ORDER_ID ORDER BY INGESTED_AT DESC) = 1
 ) AS source
 ON target.ORDER_ID = source.ORDER_ID
 WHEN MATCHED THEN UPDATE SET
@@ -43,5 +39,4 @@ VALUES
     (source.ORDER_ID, source.CUSTOMER_ID, source.ORDER_TS, source.ORDER_STATUS,
      source.TOTAL_AMOUNT, source.SOURCE_BATCH_ID);
 
--- Before enabling in a real account, replace LEDGERSHIFT_WH with a
--- concrete warehouse identifier supported by the account and validate grants.
+-- Task is created suspended. Review owner and grants before ALTER TASK ... RESUME.

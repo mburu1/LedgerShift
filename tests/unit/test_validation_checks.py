@@ -28,9 +28,16 @@ def test_row_count_mismatch_fails():
 
 
 def test_aggregate_comparison_detects_missing_and_unexpected_metrics():
-    results = compare_aggregates("orders", {"sum_amount": 100, "count": 4},
-                                {"sum_amount": 100, "extra": 1})
-    assert all(item.status == "FAIL" for item in results)
+    results = compare_aggregates(
+        "orders",
+        {"sum_amount": 100, "count": 4},
+        {"sum_amount": 100, "extra": 1},
+    )
+    assert {item.name: item.status for item in results} == {
+        "aggregate:sum_amount": "PASS",
+        "aggregate:count": "FAIL",
+        "aggregate:extra": "FAIL",
+    }
     assert {item.name for item in results} == {
         "aggregate:sum_amount", "aggregate:count", "aggregate:extra"
     }
@@ -43,7 +50,10 @@ def test_profiles_allow_numeric_tolerance_but_detect_drift():
         {"email": {"null_count": 0, "distinct_count": 11}},
         tolerance=0.5,
     )
-    assert [item.status for item in results] == ["PASS", "FAIL"]
+    assert {item.name: item.status for item in results} == {
+        "profile:email:null_count": "PASS",
+        "profile:email:distinct_count": "FAIL",
+    }
 
 
 def test_column_checksums_detect_tampered_values(spark):
