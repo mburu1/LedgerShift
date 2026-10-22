@@ -20,7 +20,7 @@ def latest_cdc_events(events: DataFrame, key: str) -> DataFrame:
     missing = sorted(required.difference(events.columns))
     if missing:
         raise ValueError("CDC events missing required columns: " + ", ".join(missing))
-    invalid_op = events.filter(~col("op").isin("I", "U", "D"))
+    invalid_op = events.filter(col("op").isNull() | ~col("op").isin("I", "U", "D"))
     if invalid_op.limit(1).count():
         raise ValueError("CDC op must be one of I, U or D")
     if events.filter(col(key).isNull() | col("lsn").isNull()).limit(1).count():
