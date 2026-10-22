@@ -46,7 +46,10 @@ def test_profiles_allow_numeric_tolerance_but_detect_drift():
         {"email": {"null_count": 0, "distinct_count": 11}},
         tolerance=0.5,
     )
-    assert [item.status for item in results] == ["PASS", "FAIL"]
+    assert {item.name: item.status for item in results} == {
+        "profile:email:null_count": "PASS",
+        "profile:email:distinct_count": "FAIL",
+    }
 
 
 def test_column_checksums_detect_tampered_values(spark):
