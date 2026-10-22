@@ -14,6 +14,12 @@ variables:
   warehouse_id:
     description: Existing SQL warehouse ID for SQL tasks
     default: ""
+  source_path:
+    description: Workspace-visible source snapshot path for validation job
+    default: /Volumes/ledgershift_dev/bronze/source/orders.jsonl
+  target_path:
+    description: Workspace-visible Delta path for validation job
+    default: /Volumes/ledgershift_dev/gold/mart_daily_revenue
 
 workspace:
   root_path: ~/.bundle/${bundle.name}/${bundle.target}
