@@ -1,0 +1,24 @@
+[build-system]
+requires = ["hatchling>=1.24"]
+build-backend = "hatchling.build"
+
+[project]
+name = "ledgershift"
+version = "0.1.0"
+requires-python = ">=3.11"
+dependencies = ["pyspark>=3.5,<4", "delta-spark>=3.2", "faker>=25", "pydantic-settings>=2.2", "pyyaml>=6"]
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "ruff>=0.5", "pre-commit>=3.7"]
+cloud = ["databricks-sdk>=0.30", "snowflake-connector-python>=3.10"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/ledgershift"]
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra"
