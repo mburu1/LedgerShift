@@ -51,5 +51,11 @@ def inject_order_faults(
             row["_fault"] = fault
             row["amount"] = "-1.00"
         manifest[fault] += 1
-    manifest.update(input_rows=len(rows), output_rows=len(output), injected_rows=len(selected), seed=seed, version=1)
+    manifest.update(
+        input_rows=len(rows),
+        output_rows=len(output),
+        injected_rows=len(selected),
+        seed=seed,
+        version=1,
+    )
     return output, manifest
