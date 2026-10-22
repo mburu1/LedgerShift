@@ -28,8 +28,11 @@ def test_row_count_mismatch_fails():
 
 
 def test_aggregate_comparison_detects_missing_and_unexpected_metrics():
-    results = compare_aggregates("orders", {"sum_amount": 100, "count": 4},
-                                {"sum_amount": 100, "extra": 1})
+    results = compare_aggregates(
+        "orders",
+        {"sum_amount": 100, "count": 4},
+        {"sum_amount": 100, "extra": 1},
+    )
     assert all(item.status == "FAIL" for item in results)
     assert {item.name for item in results} == {
         "aggregate:sum_amount", "aggregate:count", "aggregate:extra"
