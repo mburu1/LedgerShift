@@ -4,7 +4,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 
 from pyspark.sql import DataFrame
-from pyspark.sql.functions import col, concat_ws, lit, sha2, to_timestamp
+from pyspark.sql.functions import coalesce, col, concat_ws, lit, sha2, to_timestamp
 
 
 def with_attribute_hash(frame: DataFrame, tracked_columns: Sequence[str]) -> DataFrame:
@@ -14,7 +14,8 @@ def with_attribute_hash(frame: DataFrame, tracked_columns: Sequence[str]) -> Dat
         raise ValueError("tracked columns missing: " + ", ".join(missing))
     if not tracked_columns:
         raise ValueError("tracked_columns must contain at least one column")
-    values = [col(name).cast("string") for name in tracked_columns]
+    # Explicit null markers prevent concat_ws from collapsing different null patterns.
+    values = [coalesce(col(name).cast("string"), lit("<NULL>")) for name in tracked_columns]
     return frame.withColumn("_attribute_hash", sha2(concat_ws("\u001f", *values), 256))
 
 
