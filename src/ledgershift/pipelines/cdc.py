@@ -78,5 +78,10 @@ def merge_cdc(
 
     # Append only after the target merge succeeds. Replays remain event-safe if a process
     # crashes between the merge and ledger write; the single-writer constraint prevents races.
-    spark.createDataFrame([(batch_id,)], "batch_id STRING").write.format("delta").mode("append").save(ledger)
+    (
+        spark.createDataFrame([(batch_id,)], "batch_id STRING")
+        .write.format("delta")
+        .mode("append")
+        .save(ledger)
+    )
     return {"batch_id": batch_id, "already_processed": False, "events_received": received}
