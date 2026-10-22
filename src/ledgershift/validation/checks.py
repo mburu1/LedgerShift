@@ -6,7 +6,7 @@ from dataclasses import asdict, dataclass
 from typing import Any
 
 from pyspark.sql import DataFrame
-from pyspark.sql.functions import col, count, countDistinct, pmod, sum as spark_sum, xxhash64
+from pyspark.sql.functions import col, countDistinct, pmod, sum as spark_sum, xxhash64
 
 
 @dataclass(frozen=True)
@@ -136,7 +136,7 @@ def compare_sampled_rows(
     """Compare a deterministic hash bucket of rows and report differing-key counts."""
     if buckets < 1 or not 0 <= bucket < buckets:
         raise ValueError("bucket must be within the positive bucket count")
-    selected = sorted(set(columns))
+    selected = sorted(set(columns).difference({key}))
     for label, frame in (("source", source), ("target", target)):
         missing = sorted({key, *selected}.difference(frame.columns))
         if missing:
