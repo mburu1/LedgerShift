@@ -67,9 +67,8 @@ def write_report(
         ]
         lines.append("| " + " | ".join(escaped) + " |")
     if fault_reconciliation is not None:
-        lines.extend(
-            ["", "## Fault reconciliation", "", json.dumps(fault_reconciliation, indent=2, default=str)]
-        )
+        rendered_faults = json.dumps(fault_reconciliation, indent=2, default=str)
+        lines.extend(["", "## Fault reconciliation", "", rendered_faults])
     lines.extend(
         [
             "",
