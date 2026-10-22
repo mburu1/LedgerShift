@@ -2,7 +2,7 @@ resources:
   jobs:
     ledgershift_pipeline:
       name: ledgershift-${bundle.target}-pipeline
-      description: "LedgerShift local-compatible pipeline entry point; validate workspace paths before production use."
+      description: "LedgerShift generated data -> bronze/silver/gold Delta pipeline."
       max_concurrent_runs: 1
       tasks:
         - task_key: pipeline_entrypoint
@@ -15,9 +15,10 @@ resources:
             environment_version: "2"
             dependencies:
               - ../pyproject.toml
+
     ledgershift_validation:
       name: ledgershift-${bundle.target}-validation
-      description: "Fail-closed JSONL reconciliation gate. Source and target paths must exist in the job environment."
+      description: "Fail-closed source-to-gold validation. Source/target paths must be available to this job."
       max_concurrent_runs: 1
       tasks:
         - task_key: validation_entrypoint
