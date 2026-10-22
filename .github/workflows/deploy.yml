@@ -1,0 +1,66 @@
+name: Databricks bundle deployment
+
+on:
+  workflow_dispatch:
+    inputs:
+      target:
+        description: Bundle target to validate and deploy
+        required: true
+        type: choice
+        options: [dev, prod]
+  push:
+    branches: [main]
+    paths:
+      - databricks.yml
+      - resources/**
+      - src/ledgershift/**
+      - pyproject.toml
+      - .github/workflows/deploy.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ledgershift-databricks-${{ github.event.inputs.target || 'dev' }}
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: databricks/setup-cli@main
+      - name: Validate bundle
+        env:
+          DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST }}
+          DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN }}
+        run: |
+          set -euo pipefail
+          TARGET="${{ github.event.inputs.target || 'dev' }}"
+          if [ -z "${DATABRICKS_HOST:-}" ]; then
+            echo "DATABRICKS_HOST is required for cloud bundle validation." >&2
+            exit 1
+          fi
+          databricks bundle validate -t "$TARGET"
+
+  deploy:
+    needs: validate
+    if: github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment: ${{ github.event.inputs.target == 'prod' && 'production' || 'development' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: databricks/setup-cli@main
+      - name: Validate and deploy selected target
+        env:
+          DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST }}
+          DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN }}
+        run: |
+          set -euo pipefail
+          TARGET="${{ github.event.inputs.target || 'dev' }}"
+          if [ -z "${DATABRICKS_HOST:-}" ] || [ -z "${DATABRICKS_TOKEN:-}" ]; then
+            echo "Configure DATABRICKS_HOST and DATABRICKS_TOKEN in the selected GitHub Environment." >&2
+            exit 1
+          fi
+          databricks bundle validate -t "$TARGET"
+          databricks bundle deploy -t "$TARGET"
