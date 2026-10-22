@@ -2,69 +2,80 @@
 
 ## Scope and evidence
 
-This change adds a Databricks Asset Bundle definition, job resource declarations,
-a configurable Spark-to-Snowflake writer, Snowflake serving contracts, and
-window-function analytics. These are repository artifacts, not evidence of a
-successful cloud deployment. Record actual workspace and Snowflake runs only
-after they have been executed.
+This milestone adds Asset Bundle resources, a validated Spark-to-Snowflake load API,
+Snowflake serving contracts and analytics, and a fail-closed Delta/Snowflake reconciliation
+path. Source artifacts are not proof of successful cloud deployment. Record cloud evidence
+only after running against the actual workspace and account.
 
 ## M4 — Asset Bundles
 
-1. Install a current Databricks CLI and authenticate with a named profile:
+1. Install a current Databricks CLI and authenticate:
    `databricks auth login --host https://<workspace-host> --profile dev`.
-2. Validate the bundle: `databricks bundle validate -t dev`.
-3. Review planned resources: `databricks bundle plan -t dev`.
-4. Deploy only after validation and plan review: `databricks bundle deploy -t dev`.
-5. Run the job and record its run URL, commit SHA, runtime, target catalog, and
-   validation output in the deployment evidence log.
-6. Configure a separate production workspace and approved service principal
-   before using the prod target. Do not reuse development credentials.
-
-The bundle is an initial deployable scaffold. Confirm task entrypoints and
-runtime dependencies against the current pipeline CLI before treating a job
-run as successful. Unity Catalog, workspace permissions, and compute policies
-may require separate Terraform-managed provisioning.
+2. Validate: `databricks bundle validate -t dev`.
+3. Review plan: `databricks bundle plan -t dev`.
+4. Deploy only after reviewing the plan: `databricks bundle deploy -t dev`.
+5. Record pipeline run URL, commit SHA, runtime, target catalog, and output paths.
+6. The current pipeline reads `LEDGERSHIFT_DATA_DIR/source/snapshot/orders.jsonl` and writes
+   local Delta paths. A developer machine's local files are not automatically present in a
+   remote workspace. Upload source data to a governed Volume and configure the job's source
+   and output paths before claiming a workspace run.
+7. Configure a separate production workspace and non-empty service principal; never reuse
+   development credentials for production.
 
 ## M5 — Snowflake serving
 
-Required environment variables:
+Configure through environment variables or a secret scope; never commit or log values:
+`SNOWFLAKE_ACCOUNT`, `SNOWFLAKE_USER`, `SNOWFLAKE_PASSWORD`,
+`SNOWFLAKE_WAREHOUSE`, `SNOWFLAKE_DATABASE`, `SNOWFLAKE_SCHEMA`, optional
+`SNOWFLAKE_ROLE`.
 
-- `SNOWFLAKE_ACCOUNT` (account identifier or connector URL expected by your
-  installed connector)
-- `SNOWFLAKE_USER`, `SNOWFLAKE_PASSWORD`
-- `SNOWFLAKE_WAREHOUSE`, `SNOWFLAKE_DATABASE`, `SNOWFLAKE_SCHEMA`
-- Optional: `SNOWFLAKE_ROLE`
+Install a Spark Snowflake connector compatible with the deployed Databricks Runtime.
+The connector is not included in the standard Python dependencies.
 
-Never commit credentials or print connector options in logs. Install the
-Snowflake Spark connector compatible with the deployed Databricks Runtime;
-the connector is not bundled into the application automatically.
+Apply scripts in this order after selecting the intended database:
+1. `01_schemas.sql`
+2. `02_tables.sql`
+3. `04_analytics_window.sql`
+4. `05_secure_views.sql`
 
-Apply SQL in order: `01_schemas.sql`, `02_tables.sql`,
-`04_analytics_window.sql`, then `05_secure_views.sql`. The streams/tasks
-script is intentionally not included until a concrete CDC source and task
-ownership model are defined.
+The optional `03_streams_tasks.sql` uses an illustrative warehouse identifier,
+`LEDGERSHIFT_WH`; replace it before execution. Keep the task suspended until the role,
+grants, warehouse and CDC semantics have been reviewed.
 
-## Loading and idempotency
+## Load semantics
 
-`load_dataframe` writes a caller-supplied Spark DataFrame to a target table.
-Append is not idempotent. For repeatable loads, write each batch to a staging
-table with a deterministic batch ID, validate uniqueness and row counts, then
-MERGE into the serving table on its business key in a controlled Snowflake SQL
-transaction. Preserve deletes explicitly if the source CDC contract requires
-them.
+`load_dataframe` supports direct append/overwrite for controlled loads. Append is not
+idempotent. `load_dataframe_via_stage` writes a batch to a staging table, then merges by
+caller-specified business keys. Serialize writers for the same target, agree on a stable
+batch ID and target column contract, and test connector compatibility. Source deletes require
+an explicit tombstone contract.
 
-## Validation acceptance criteria
+## Delta-to-Snowflake reconciliation
 
-- Bundle validates for dev and prod using real workspace configuration.
-- Dev job completes and run metadata is captured.
-- Snowflake table schemas match gold data types and business keys.
-- Load is rerunnable without duplicate business records.
-- Reconciliation checks row counts, distinct business keys, aggregate amounts,
-  null profiles, and sampled key-level differences between Delta gold and
-  Snowflake.
-- A deliberately altered target is rejected by validation.
-- Credentials are stored in a secret scope or CI secret store and are absent
-  from source, logs, and committed artifacts.
+After gold tables and the Snowflake serving table exist:
 
-Do not mark M4 or M5 complete until these checks have run against the target
-services. Local validation of configuration and SQL text is not cloud evidence.
+```bash
+python -m ledgershift.validation.runner \
+  --source data/gold/fact_orders \
+  --target-format snowflake \
+  --target-table MART.FACT_ORDERS \
+  --key order_id
+```
+
+The runner compares row counts, recognized key counts, monetary/date aggregates, shared-column
+null/distinct/checksum profiles, and one deterministic hash bucket of sampled records. It
+writes JSON and Markdown reports and exits non-zero on any failed check. For high-assurance
+sign-off, run all hash buckets or add a full ordered-key diff; a single sample bucket is not
+a complete proof of row-level equality. Use matching column names and compatible data types.
+
+## Acceptance evidence
+
+- [ ] Bundle validates and deployment plan is reviewed against a real workspace.
+- [ ] Dev deployment and job run succeed; metadata is captured.
+- [ ] Snowflake DDL is applied in a test account, with grants reviewed.
+- [ ] A replay test confirms no duplicate business keys.
+- [ ] Delta/Snowflake reconciliation report is PASS; tampering produces FAIL/non-zero exit.
+- [ ] Analyst role cannot access excluded sensitive columns.
+- [ ] Secrets are absent from source, logs and artifacts.
+
+Keep M4/M5 marked pending cloud verification until this evidence is attached.
