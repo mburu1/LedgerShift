@@ -105,11 +105,6 @@ def load_dataframe_via_stage(
     missing_keys = sorted(set(keys).difference(dataframe.columns))
     if missing_keys:
         raise ValueError("DataFrame is missing merge key columns: " + ", ".join(missing_keys))
-    if not {"SOURCE_BATCH_ID", *keys}.issubset(
-        set(dataframe.columns) | {"SOURCE_BATCH_ID"}
-    ):
-        raise ValueError("The source frame must contain all merge keys")
-
     from pyspark.sql.functions import lit
 
     source = dataframe if "SOURCE_BATCH_ID" in dataframe.columns else dataframe.withColumn(
