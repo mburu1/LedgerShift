@@ -10,7 +10,7 @@ variables:
     default: ledgershift_dev
   service_principal_id:
     description: Application ID of the production run-as service principal
-    default: ""
+    default: "00000000-0000-0000-0000-000000000000"
   warehouse_id:
     description: Existing SQL warehouse ID for SQL tasks
     default: ""
