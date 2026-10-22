@@ -1,0 +1,3 @@
+databricks_host = "https://<your-production-workspace-host>"
+catalog_name = "ledgershift_prod"
+owner = "ledgershift"

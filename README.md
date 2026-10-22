@@ -527,3 +527,14 @@ Repository artifacts added for Databricks Asset Bundles and Snowflake serving:
 - `docs/deployment-m4-m5.md` and `docs/validation/m4-m5-acceptance.md` document deployment and evidence requirements.
 
 **Status: implementation scaffold committed; cloud verification pending.** Databricks bundle validation/deployment, Spark connector compatibility, Snowflake SQL execution, and Delta-to-Snowflake reconciliation have not been verified by these repository writes. The bundle job paths and the task warehouse must be checked against the actual workspace/account before deployment. Do not treat the milestones as complete until the acceptance checklist has recorded real run evidence.
+
+
+## M6–M8 implementation update (2026-10-22)
+
+Added implementation scaffolding on branch `feat/m6-m8-governance-orchestration-cicd`:
+
+- M6: Terraform provider/version pinning, typed variables, Unity Catalog catalog and bronze/silver/gold/ops schemas, governance groups, grants and outputs; safe environment variable examples.
+- M7: scheduled Airflow DAG invoking the bundled Databricks job with retries, exponential backoff, serialized runs and an idempotency token.
+- M8: CI jobs for Python lint/tests, Terraform format/validation and bundle validation; deployment workflow for dev and manually approved production environment; deployment/acceptance guide.
+
+**Status: implementation scaffold only; cloud and CI verification pending.** Terraform has not been initialized or validated in this environment, Airflow has not been run, and GitHub Actions or Databricks deployments have not been observed. Configure GitHub `production` required reviewers, workspace secrets and Airflow's `databricks_default` connection before operating these workflows. Review provider-version/resource compatibility and the exact bundle job parameter contract before applying infrastructure.
