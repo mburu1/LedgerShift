@@ -1,0 +1,10 @@
+-- Grant access to roles through your environment-specific deployment process.
+-- Email is intentionally excluded from the analyst-facing projection.
+CREATE OR REPLACE SECURE VIEW GOVERNANCE.V_CUSTOMER_ANALYTICS AS
+SELECT CUSTOMER_ID, CUSTOMER_NAME, VALID_FROM, VALID_TO, IS_CURRENT
+FROM MART.DIM_CUSTOMER;
+
+-- Example grants (replace role names to match the account's RBAC convention):
+-- GRANT USAGE ON SCHEMA GOVERNANCE TO ROLE LEDGERSHIFT_ANALYST;
+-- GRANT SELECT ON VIEW GOVERNANCE.V_CUSTOMER_ANALYTICS TO ROLE LEDGERSHIFT_ANALYST;
+-- GRANT SELECT ON ALL VIEWS IN SCHEMA MART TO ROLE LEDGERSHIFT_ANALYST;
