@@ -21,4 +21,5 @@ target-version = "py311"
 select = ["E", "F", "UP", "B"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-addopts = "-ra"
+python_files = ["test_*.py"]
+addopts = "-ra --import-mode=importlib"
