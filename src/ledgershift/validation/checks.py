@@ -39,12 +39,11 @@ def compare_aggregates(table: str, expected: Mapping[str, Any],
     results = []
     for metric in sorted(set(expected) | set(actual)):
         left, right = expected.get(metric), actual.get(metric)
-        if metric not in expected:
-            results.append(CheckResult("aggregate:" + metric, table, "FAIL", None, right,
-                                       "unexpected metric"))
-        elif metric not in actual:
-            results.append(CheckResult("aggregate:" + metric, table, "FAIL", left, None,
-                                       "missing metric"))
+        if metric not in expected or metric not in actual:
+            reason = "unexpected metric" if metric not in expected else "missing metric"
+            results.append(
+                CheckResult("aggregate:" + metric, table, "FAIL", left, right, reason)
+            )
         else:
             results.append(_result("aggregate:" + metric, table, left, right))
     return results
@@ -65,13 +64,22 @@ def compare_profiles(table: str, expected: Mapping[str, Mapping[str, Any]],
             continue
         for metric in sorted(set(expected[column]) | set(actual[column])):
             left, right = expected[column].get(metric), actual[column].get(metric)
-            if isinstance(left, (int, float)) and isinstance(right, (int, float)):
+            if metric not in expected[column] or metric not in actual[column]:
+                passed = False
+            elif isinstance(left, (int, float)) and isinstance(right, (int, float)):
                 passed = abs(left - right) <= tolerance
             else:
                 passed = left == right
-            results.append(CheckResult(
-                "profile:" + column + ":" + metric, table, "PASS" if passed else "FAIL",
-                left, right, "within tolerance" if passed else "profile mismatch"))
+            results.append(
+                CheckResult(
+                    "profile:" + column + ":" + metric,
+                    table,
+                    "PASS" if passed else "FAIL",
+                    left,
+                    right,
+                    "within tolerance" if passed else "profile mismatch",
+                )
+            )
     return results
 
 
