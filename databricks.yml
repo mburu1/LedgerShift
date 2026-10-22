@@ -8,8 +8,12 @@ variables:
   catalog:
     description: Unity Catalog catalog for this deployment
     default: ledgershift_dev
+  service_principal_id:
+    description: Application ID of the production run-as service principal
+    default: ""
   warehouse_id:
-    description: Existing SQL warehouse ID used by SQL tasks
+    description: Existing SQL warehouse ID, reserved for SQL warehouse tasks
+    default: ""
 
 workspace:
   root_path: ~/.bundle/${bundle.name}/${bundle.target}
