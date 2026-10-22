@@ -59,11 +59,21 @@ def merge_cdc(
     staged = latest_cdc_events(events, key)
     received = staged.count()
     target_table = DeltaTable.forPath(spark, target)
+    target_columns = target_table.toDF().columns
+    missing_target_values = sorted(set(target_columns).difference(staged.columns))
+    if missing_target_values:
+        raise ValueError(
+            "CDC events missing target columns: " + ", ".join(missing_target_values)
+        )
+    # CDC operation is control metadata, not a business-table column. Explicit mappings
+    # prevent Delta updateAll/insertAll from trying to write the op column into the target.
+    update_values = {name: f"s.{name}" for name in target_columns if name != key}
+    insert_values = {name: f"s.{name}" for name in target_columns}
     (target_table.alias("t")
      .merge(staged.alias("s"), f"t.{key} = s.{key}")
      .whenMatchedDelete(condition="s.op = 'D' AND s.lsn >= t.lsn")
-     .whenMatchedUpdateAll(condition="s.op <> 'D' AND s.lsn > t.lsn")
-     .whenNotMatchedInsertAll(condition="s.op <> 'D'")
+     .whenMatchedUpdate(condition="s.op <> 'D' AND s.lsn > t.lsn", set=update_values)
+     .whenNotMatchedInsert(condition="s.op <> 'D'", values=insert_values)
      .execute())
 
     # Append only after the target merge succeeds. Replays remain event-safe if a process
