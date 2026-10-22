@@ -1,0 +1,32 @@
+bundle:
+  name: ledgershift
+
+include:
+  - resources/*.yml
+
+variables:
+  catalog:
+    description: Unity Catalog catalog for this deployment
+    default: ledgershift_dev
+  warehouse_id:
+    description: Existing SQL warehouse ID used by SQL tasks
+
+workspace:
+  root_path: ~/.bundle/${bundle.name}/${bundle.target}
+
+targets:
+  dev:
+    default: true
+    mode: development
+    variables:
+      catalog: ledgershift_dev
+    workspace:
+      host: ${env.DATABRICKS_HOST}
+  prod:
+    mode: production
+    variables:
+      catalog: ledgershift_prod
+    workspace:
+      host: ${env.DATABRICKS_HOST}
+    run_as:
+      service_principal_name: ${var.service_principal_id}
