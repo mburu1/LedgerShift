@@ -1,7 +1,5 @@
 from pathlib import Path
-
 import pytest
-
 from ledgershift.validation.runner import _read_file_source
 
 
