@@ -6,13 +6,8 @@ import json
 from pathlib import Path
 
 from ledgershift.validation.checks import (
-    CheckResult,
-    compare_aggregates,
-    compare_column_checksums,
-    compare_profiles,
-    compare_row_counts,
-    compare_sampled_rows,
-    summarize,
+    CheckResult, compare_aggregates, compare_column_checksums, compare_profiles,
+    compare_row_counts, compare_sampled_rows, summarize,
 )
 from ledgershift.validation.report import write_report
 
@@ -25,9 +20,9 @@ def _read_file_source(spark, path: Path):
     if path.is_file() and path.suffix.lower() == ".parquet":
         return spark.read.parquet(str(path))
     if path.is_dir():
-        jsonl = sorted(path.rglob("*.jsonl"))
-        if jsonl:
-            return spark.read.json([str(item) for item in jsonl])
+        files = sorted(path.rglob("*.jsonl"))
+        if files:
+            return spark.read.json([str(item) for item in files])
         raise ValueError(f"directory has neither Delta metadata nor JSONL records: {path}")
     if path.is_file() and path.suffix.lower() == ".jsonl":
         return spark.read.json(str(path))
@@ -38,8 +33,8 @@ def _metrics(frame) -> dict[str, object]:
     from pyspark.sql.functions import col, count, countDistinct, max as spark_max, min as spark_min, sum as spark_sum
 
     columns = set(frame.columns)
-    count_row = frame.agg(count("*").alias("row_count")).first()
-    result: dict[str, object] = {"row_count": count_row["row_count"]}
+    row = frame.agg(count("*").alias("row_count")).first()
+    result: dict[str, object] = {"row_count": row["row_count"]}
     key = next((name for name in ("order_id", "payment_id", "customer_id") if name in columns), None)
     if key:
         result[f"distinct_{key}"] = frame.agg(countDistinct(col(key)).alias("n")).first()["n"]
@@ -50,11 +45,11 @@ def _metrics(frame) -> dict[str, object]:
         ).first()["n"]
     date_column = next((name for name in ("order_date", "order_ts", "revenue_date") if name in columns), None)
     if date_column:
-        value = frame.agg(
+        stats = frame.agg(
             spark_min(col(date_column).cast("string")).alias("min_date"),
             spark_max(col(date_column).cast("string")).alias("max_date"),
         ).first()
-        result[f"min_{date_column}"], result[f"max_{date_column}"] = value["min_date"], value["max_date"]
+        result[f"min_{date_column}"], result[f"max_{date_column}"] = stats["min_date"], stats["max_date"]
     return result
 
 
@@ -63,6 +58,11 @@ def _compare_dataframes(source, target, table: str, key: str | None, buckets: in
     results = [compare_row_counts(table, source_metrics["row_count"], target_metrics["row_count"])]
     results.extend(compare_aggregates(table, source_metrics, target_metrics))
     shared = sorted(set(source.columns) & set(target.columns))
+    if not shared:
+        results.append(CheckResult("schema_overlap", table, "FAIL", "at least one shared column", 0,
+                                   "source and target have no columns in common"))
+        return results
+
     results.extend(compare_column_checksums(source, target, table, shared))
     source_profile, target_profile = {}, {}
     from pyspark.sql.functions import col, count, countDistinct
@@ -73,13 +73,16 @@ def _compare_dataframes(source, target, table: str, key: str | None, buckets: in
                 count(col(column)).alias("non_null_count"),
                 countDistinct(col(column)).alias("distinct_count"),
             ).first().asDict()
-        source_profile[column] = profile(source)
-        target_profile[column] = profile(target)
+        source_profile[column], target_profile[column] = profile(source), profile(target)
     results.extend(compare_profiles(table, source_profile, target_profile))
     resolved_key = key or next((name for name in ("order_id", "payment_id", "customer_id") if name in shared), None)
     if resolved_key:
-        selected = [name for name in shared if name != resolved_key]
-        results.append(compare_sampled_rows(source, target, table, resolved_key, selected, buckets, 0))
+        if resolved_key not in source.columns or resolved_key not in target.columns:
+            results.append(CheckResult("sampled_row_diff", table, "FAIL", resolved_key, None,
+                                       "business key is absent from one side"))
+        else:
+            non_key = [name for name in shared if name != resolved_key]
+            results.append(compare_sampled_rows(source, target, table, resolved_key, non_key, buckets, 0))
     else:
         results.append(CheckResult("sampled_row_diff", table, "FAIL", "business key", None,
                                    "No shared business key; pass --key"))
