@@ -5,6 +5,9 @@ from collections.abc import Iterable, Mapping
 from dataclasses import asdict, dataclass
 from typing import Any
 
+from pyspark.sql import DataFrame
+from pyspark.sql.functions import col, count, countDistinct, pmod, sum as spark_sum, xxhash64
+
 
 @dataclass(frozen=True)
 class CheckResult:
@@ -70,6 +73,85 @@ def compare_profiles(table: str, expected: Mapping[str, Mapping[str, Any]],
                 "profile:" + column + ":" + metric, table, "PASS" if passed else "FAIL",
                 left, right, "within tolerance" if passed else "profile mismatch"))
     return results
+
+
+def compare_column_checksums(
+    source: DataFrame, target: DataFrame, table: str, columns: Iterable[str]
+) -> list[CheckResult]:
+    """Compare null-aware row counts and stable xxhash64 sums for each requested column."""
+    results: list[CheckResult] = []
+    source_columns, target_columns = set(source.columns), set(target.columns)
+    for name in sorted(set(columns)):
+        if name not in source_columns or name not in target_columns:
+            results.append(CheckResult(
+                "column_checksum", table, "FAIL",
+                name in source_columns, name in target_columns,
+                "column missing from source or target",
+            ))
+            continue
+
+        def profile(frame: DataFrame) -> dict[str, Any]:
+            value = col(name).cast("string")
+            row = frame.agg(
+                count("*").alias("rows"),
+                count(value).alias("non_null"),
+                countDistinct(value).alias("distinct"),
+                spark_sum(xxhash64(value).cast("decimal(38,0)")).alias("checksum"),
+            ).first()
+            return row.asDict()
+
+        left, right = profile(source), profile(target)
+        for metric in ("rows", "non_null", "distinct", "checksum"):
+            results.append(_result(
+                f"column:{name}:{metric}", table, left[metric], right[metric]
+            ))
+    return results
+
+
+def compare_referential_integrity(
+    child: DataFrame, parent: DataFrame, table: str, foreign_key: str, parent_key: str
+) -> CheckResult:
+    """Fail when non-null child foreign keys do not resolve to a parent key."""
+    if foreign_key not in child.columns:
+        raise ValueError(f"child table missing foreign key column: {foreign_key}")
+    if parent_key not in parent.columns:
+        raise ValueError(f"parent table missing key column: {parent_key}")
+    parent_keys = parent.select(col(parent_key).alias("_parent_key")).dropDuplicates()
+    orphans = (child.filter(col(foreign_key).isNotNull())
+               .join(parent_keys, col(foreign_key) == col("_parent_key"), "left_anti")
+               .count())
+    return _result("referential_integrity", table, 0, orphans,
+                   "all foreign keys resolve" if orphans == 0 else f"{orphans} orphan rows")
+
+
+def compare_sampled_rows(
+    source: DataFrame,
+    target: DataFrame,
+    table: str,
+    key: str,
+    columns: Iterable[str],
+    buckets: int = 100,
+    bucket: int = 0,
+) -> CheckResult:
+    """Compare a deterministic hash bucket of rows and report differing-key counts."""
+    if buckets < 1 or not 0 <= bucket < buckets:
+        raise ValueError("bucket must be within the positive bucket count")
+    selected = sorted(set(columns))
+    for label, frame in (("source", source), ("target", target)):
+        missing = sorted({key, *selected}.difference(frame.columns))
+        if missing:
+            raise ValueError(f"{label} table missing columns: " + ", ".join(missing))
+    left = source.filter(pmod(xxhash64(col(key)), buckets) == bucket).select(key, *selected)
+    right = target.filter(pmod(xxhash64(col(key)), buckets) == bucket).select(key, *selected)
+    l_alias, r_alias = left.alias("l"), right.alias("r")
+    joined = l_alias.join(r_alias, col(f"l.{key}") == col(f"r.{key}"), "full_outer")
+    missing_key = col(f"l.{key}").isNull() | col(f"r.{key}").isNull()
+    changed = missing_key
+    for name in selected:
+        changed = changed | ~col(f"l.{name}").eqNullSafe(col(f"r.{name}"))
+    mismatches = joined.filter(changed).count()
+    return _result("sampled_row_diff", table, 0, mismatches,
+                   "sampled rows match" if mismatches == 0 else f"{mismatches} sampled mismatches")
 
 
 def summarize(results: Iterable[CheckResult]) -> dict[str, Any]:
